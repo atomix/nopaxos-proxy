@@ -23,6 +23,7 @@ import (
 	"github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos/util"
 	"math"
 	"sync"
+	"time"
 )
 
 // NewClient returns a new NOPaxos client
@@ -88,14 +89,14 @@ func (c *Client) receive(stream nopaxos.ClientService_ClientStreamClient) {
 
 		switch r := response.Message.(type) {
 		case *nopaxos.ClientMessage_CommandReply:
-			if r.CommandReply.ViewId.SessionId != c.config.SessionId {
+			if r.CommandReply.ViewID.SessionNum != c.config.SessionId {
 				continue
 			}
 			c.mu.Lock()
-			handler := c.commands[r.CommandReply.MessageId]
+			handler := c.commands[r.CommandReply.MessageNum]
 			complete := false
 			if handler != nil && handler.succeed(r.CommandReply.Value) {
-				delete(c.commands, r.CommandReply.MessageId)
+				delete(c.commands, r.CommandReply.MessageNum)
 				complete = true
 			}
 			c.mu.Unlock()
@@ -103,7 +104,7 @@ func (c *Client) receive(stream nopaxos.ClientService_ClientStreamClient) {
 				handler.complete()
 			}
 		case *nopaxos.ClientMessage_QueryReply:
-			if r.QueryReply.ViewId.SessionId != c.config.SessionId {
+			if r.QueryReply.ViewID.SessionNum != c.config.SessionId {
 				continue
 			}
 		}
@@ -120,9 +121,10 @@ func (c *Client) Write(ctx context.Context, in []byte, ch chan<- node.Output) er
 	c.mu.Unlock()
 
 	request := &nopaxos.CommandRequest{
-		SessionId: c.config.SessionId,
-		MessageId: messageID,
-		Value:     in,
+		SessionNum: c.config.SessionId,
+		MessageNum: messageID,
+		Timestamp:  time.Now(),
+		Value:      in,
 	}
 
 	go c.write(ctx, request, ch, handler)
@@ -139,8 +141,10 @@ func (c *Client) Read(ctx context.Context, in []byte, ch chan<- node.Output) err
 	c.mu.Unlock()
 
 	request := &nopaxos.QueryRequest{
-		SessionId: c.config.SessionId,
-		Value:     in,
+		SessionNum: c.config.SessionId,
+		MessageNum: messageID,
+		Timestamp:  time.Now(),
+		Value:      in,
 	}
 
 	go c.read(ctx, request, ch, handler)
