@@ -73,13 +73,13 @@ type Client struct {
 func (c *Client) connect() {
 	conn := c.conns.Front()
 	for conn != nil {
-		stream := conn.Value.(nopaxos.NOPaxosService_StreamClient)
+		stream := conn.Value.(nopaxos.ClientService_ClientStreamClient)
 		go c.receive(stream)
 		conn = conn.Next()
 	}
 }
 
-func (c *Client) receive(stream nopaxos.NOPaxosService_StreamClient) {
+func (c *Client) receive(stream nopaxos.ClientService_ClientStreamClient) {
 	for {
 		response, err := stream.Recv()
 		if err != nil {
@@ -87,8 +87,8 @@ func (c *Client) receive(stream nopaxos.NOPaxosService_StreamClient) {
 		}
 
 		switch r := response.Message.(type) {
-		case *nopaxos.Message_CommandReply:
-			if r.CommandReply.SessionId != c.config.SessionId {
+		case *nopaxos.ClientMessage_CommandReply:
+			if r.CommandReply.ViewId.SessionId != c.config.SessionId {
 				continue
 			}
 			c.mu.Lock()
@@ -102,8 +102,8 @@ func (c *Client) receive(stream nopaxos.NOPaxosService_StreamClient) {
 			if complete {
 				handler.complete()
 			}
-		case *nopaxos.Message_QueryReply:
-			if r.QueryReply.SessionId != c.config.SessionId {
+		case *nopaxos.ClientMessage_QueryReply:
+			if r.QueryReply.ViewId.SessionId != c.config.SessionId {
 				continue
 			}
 		}
@@ -150,8 +150,8 @@ func (c *Client) Read(ctx context.Context, in []byte, ch chan<- node.Output) err
 func (c *Client) write(ctx context.Context, request *nopaxos.CommandRequest, ch chan<- node.Output, handler *commandHandler) {
 	conn := c.conns.Front()
 	for conn != nil {
-		err := conn.Value.(nopaxos.NOPaxosService_StreamClient).Send(&nopaxos.Message{
-			Message: &nopaxos.Message_Command{
+		err := conn.Value.(nopaxos.ClientService_ClientStreamClient).Send(&nopaxos.ClientMessage{
+			Message: &nopaxos.ClientMessage_Command{
 				Command: request,
 			},
 		})
@@ -165,8 +165,8 @@ func (c *Client) write(ctx context.Context, request *nopaxos.CommandRequest, ch 
 func (c *Client) read(ctx context.Context, request *nopaxos.QueryRequest, ch chan<- node.Output, handler *queryHandler) {
 	conn := c.conns.Front()
 	for conn != nil {
-		_ = conn.Value.(nopaxos.NOPaxosService_StreamClient).Send(&nopaxos.Message{
-			Message: &nopaxos.Message_Query{
+		_ = conn.Value.(nopaxos.ClientService_ClientStreamClient).Send(&nopaxos.ClientMessage{
+			Message: &nopaxos.ClientMessage_Query{
 				Query: request,
 			},
 		})
