@@ -19,7 +19,7 @@ import (
 	"context"
 	"github.com/atomix/atomix-go-node/pkg/atomix/cluster"
 	"github.com/atomix/atomix-go-node/pkg/atomix/node"
-	nopaxos "github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos/protocol"
+	"github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos/protocol"
 	"github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos/util"
 	"math"
 	"sync"
@@ -28,12 +28,11 @@ import (
 
 // NewClient returns a new NOPaxos client
 func NewClient(config cluster.Cluster, sequencerConfig *SequencerConfig) (*Client, error) {
-	cluster := nopaxos.NewCluster(config)
-	return newClient(cluster, sequencerConfig)
+	return newClient(NewCluster(config), sequencerConfig)
 }
 
 // newClient returns a new NOPaxos client
-func newClient(cluster nopaxos.Cluster, config *SequencerConfig) (*Client, error) {
+func newClient(cluster *Cluster, config *SequencerConfig) (*Client, error) {
 	conns := list.New()
 	for _, member := range cluster.Members() {
 		stream, err := cluster.GetStream(member)
@@ -48,8 +47,8 @@ func newClient(cluster nopaxos.Cluster, config *SequencerConfig) (*Client, error
 		config:   config,
 		conns:    conns,
 		quorum:   quorum,
-		commands: make(map[nopaxos.MessageID]*commandHandler),
-		queries:  make(map[nopaxos.MessageID]*queryHandler),
+		commands: make(map[protocol.MessageID]*commandHandler),
+		queries:  make(map[protocol.MessageID]*queryHandler),
 		log:      util.NewNodeLogger(string(cluster.Member())),
 	}
 	client.connect()
@@ -59,14 +58,14 @@ func newClient(cluster nopaxos.Cluster, config *SequencerConfig) (*Client, error
 // Client is a service Client implementation for the NOPaxos consensus protocol
 type Client struct {
 	node.Client
-	cluster   nopaxos.Cluster
+	cluster   *Cluster
 	config    *SequencerConfig
 	conns     *list.List
 	quorum    int
-	commandID nopaxos.MessageID
-	queryID   nopaxos.MessageID
-	commands  map[nopaxos.MessageID]*commandHandler
-	queries   map[nopaxos.MessageID]*queryHandler
+	commandID protocol.MessageID
+	queryID   protocol.MessageID
+	commands  map[protocol.MessageID]*commandHandler
+	queries   map[protocol.MessageID]*queryHandler
 	mu        sync.RWMutex
 	log       util.Logger
 }
@@ -74,13 +73,13 @@ type Client struct {
 func (c *Client) connect() {
 	conn := c.conns.Front()
 	for conn != nil {
-		stream := conn.Value.(nopaxos.ClientService_ClientStreamClient)
+		stream := conn.Value.(protocol.ClientService_ClientStreamClient)
 		go c.receive(stream)
 		conn = conn.Next()
 	}
 }
 
-func (c *Client) receive(stream nopaxos.ClientService_ClientStreamClient) {
+func (c *Client) receive(stream protocol.ClientService_ClientStreamClient) {
 	for {
 		response, err := stream.Recv()
 		if err != nil {
@@ -88,7 +87,7 @@ func (c *Client) receive(stream nopaxos.ClientService_ClientStreamClient) {
 		}
 
 		switch r := response.Message.(type) {
-		case *nopaxos.ClientMessage_CommandReply:
+		case *protocol.ClientMessage_CommandReply:
 			if r.CommandReply.ViewID.SessionNum != c.config.SessionId {
 				continue
 			}
@@ -103,7 +102,7 @@ func (c *Client) receive(stream nopaxos.ClientService_ClientStreamClient) {
 			if complete {
 				handler.complete()
 			}
-		case *nopaxos.ClientMessage_QueryReply:
+		case *protocol.ClientMessage_QueryReply:
 			if r.QueryReply.ViewID.SessionNum != c.config.SessionId {
 				continue
 			}
@@ -113,14 +112,14 @@ func (c *Client) receive(stream nopaxos.ClientService_ClientStreamClient) {
 
 // Write sends a write operation to the cluster
 func (c *Client) Write(ctx context.Context, in []byte, ch chan<- node.Output) error {
-	handler := &commandHandler{quorum: c.quorum}
+	handler := &commandHandler{ch: ch, quorum: c.quorum}
 	c.mu.Lock()
 	messageID := c.commandID + 1
 	c.commandID = messageID
 	c.commands[messageID] = handler
 	c.mu.Unlock()
 
-	request := &nopaxos.CommandRequest{
+	request := &protocol.CommandRequest{
 		SessionNum: c.config.SessionId,
 		MessageNum: messageID,
 		Timestamp:  time.Now(),
@@ -140,7 +139,7 @@ func (c *Client) Read(ctx context.Context, in []byte, ch chan<- node.Output) err
 	c.queries[messageID] = handler
 	c.mu.Unlock()
 
-	request := &nopaxos.QueryRequest{
+	request := &protocol.QueryRequest{
 		SessionNum: c.config.SessionId,
 		MessageNum: messageID,
 		Timestamp:  time.Now(),
@@ -151,11 +150,11 @@ func (c *Client) Read(ctx context.Context, in []byte, ch chan<- node.Output) err
 	return nil
 }
 
-func (c *Client) write(ctx context.Context, request *nopaxos.CommandRequest, ch chan<- node.Output, handler *commandHandler) {
+func (c *Client) write(ctx context.Context, request *protocol.CommandRequest, ch chan<- node.Output, handler *commandHandler) {
 	conn := c.conns.Front()
 	for conn != nil {
-		err := conn.Value.(nopaxos.ClientService_ClientStreamClient).Send(&nopaxos.ClientMessage{
-			Message: &nopaxos.ClientMessage_Command{
+		err := conn.Value.(protocol.ClientService_ClientStreamClient).Send(&protocol.ClientMessage{
+			Message: &protocol.ClientMessage_Command{
 				Command: request,
 			},
 		})
@@ -166,11 +165,11 @@ func (c *Client) write(ctx context.Context, request *nopaxos.CommandRequest, ch 
 	}
 }
 
-func (c *Client) read(ctx context.Context, request *nopaxos.QueryRequest, ch chan<- node.Output, handler *queryHandler) {
+func (c *Client) read(ctx context.Context, request *protocol.QueryRequest, ch chan<- node.Output, handler *queryHandler) {
 	conn := c.conns.Front()
 	for conn != nil {
-		_ = conn.Value.(nopaxos.ClientService_ClientStreamClient).Send(&nopaxos.ClientMessage{
-			Message: &nopaxos.ClientMessage_Query{
+		_ = conn.Value.(protocol.ClientService_ClientStreamClient).Send(&protocol.ClientMessage{
+			Message: &protocol.ClientMessage_Query{
 				Query: request,
 			},
 		})

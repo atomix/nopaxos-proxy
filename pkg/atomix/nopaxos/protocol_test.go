@@ -15,14 +15,72 @@
 package nopaxos
 
 import (
+	"context"
 	"github.com/atomix/atomix-api/proto/atomix/controller"
 	"github.com/atomix/atomix-go-node/pkg/atomix"
+	"github.com/atomix/atomix-go-node/pkg/atomix/cluster"
+	"github.com/atomix/atomix-go-node/pkg/atomix/counter"
+	node2 "github.com/atomix/atomix-go-node/pkg/atomix/node"
 	"github.com/atomix/atomix-go-node/pkg/atomix/registry"
+	"github.com/atomix/atomix-go-node/pkg/atomix/service"
+	"github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos"
+	"github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos/config"
+	"github.com/gogo/protobuf/proto"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
 
 func TestProtocol(t *testing.T) {
+	logrus.SetLevel(logrus.TraceLevel)
+
+	pingInterval := 1 * time.Second
+	leaderTimeout := 2 * time.Second
+	config := &config.ProtocolConfig{PingInterval: &pingInterval, LeaderTimeout: &leaderTimeout}
+
+	members := map[string]cluster.Member{
+		"foo": {
+			ID:   "foo",
+			Host: "localhost",
+			Port: 5678,
+		},
+		"bar": {
+			ID:   "bar",
+			Host: "localhost",
+			Port: 5679,
+		},
+		"baz": {
+			ID:   "baz",
+			Host: "localhost",
+			Port: 5680,
+		},
+	}
+
+	clusterFoo := cluster.Cluster{
+		MemberID: "foo",
+		Members:  members,
+	}
+	serverFoo := nopaxos.NewServer(clusterFoo, registry.Registry, config)
+
+	clusterBar := cluster.Cluster{
+		MemberID: "bar",
+		Members:  members,
+	}
+	serverBar := nopaxos.NewServer(clusterBar, registry.Registry, config)
+
+	clusterBaz := cluster.Cluster{
+		MemberID: "baz",
+		Members:  members,
+	}
+	serverBaz := nopaxos.NewServer(clusterBaz, registry.Registry, config)
+
+	go serverFoo.Start()
+	go serverBar.Start()
+	go serverBaz.Start()
+
+	time.Sleep(5 * time.Second)
+
 	c := &controller.PartitionConfig{
 		Partition: &controller.PartitionId{
 			Partition: 1,
@@ -33,15 +91,57 @@ func TestProtocol(t *testing.T) {
 		},
 		Members: []*controller.NodeConfig{
 			{
+				ID:   "sequencer",
+				Host: "localhost",
+				Port: 5677,
+			},
+			{
 				ID:   "foo",
+				Host: "localhost",
+				Port: 5678,
+			},
+			{
+				ID:   "bar",
 				Host: "localhost",
 				Port: 5679,
 			},
+			{
+				ID:   "baz",
+				Host: "localhost",
+				Port: 5680,
+			},
 		},
 	}
-	protocol := NewProtocol(&SequencerConfig{})
-	node := atomix.NewNode("foo", c, protocol, registry.Registry)
+	protocol := NewProtocol(&SequencerConfig{
+		SessionId: 1,
+	})
+	node := atomix.NewNode("sequencer", c, protocol, registry.Registry)
 	node.Start()
 	time.Sleep(1 * time.Second)
-	defer node.Stop()
+
+	bytes, _ := proto.Marshal(&counter.SetRequest{
+		Value: 1,
+	})
+	bytes, _ = proto.Marshal(&service.CommandRequest{
+		Context: &service.RequestContext{},
+		Name:    "set",
+		Command: bytes,
+	})
+	bytes, _ = proto.Marshal(&service.ServiceRequest{
+		Id: &service.ServiceId{
+			Type:      "counter",
+			Name:      "test",
+			Namespace: "test",
+		},
+		Request: &service.ServiceRequest_Command{
+			Command: bytes,
+		},
+	})
+
+	client := protocol.Client()
+	ch := make(chan node2.Output)
+	go client.Write(context.Background(), bytes, ch)
+	out := <-ch
+	assert.Nil(t, out.Error)
+	assert.NotNil(t, out.Value)
 }
