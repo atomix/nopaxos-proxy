@@ -35,16 +35,6 @@ type Protocol struct {
 
 // Start starts the NOPaxos protocol
 func (p *Protocol) Start(config cluster.Cluster, registry *node.Registry) error {
-	members := make(map[string]cluster.Member)
-	for id, member := range config.Members {
-		if member.ID != config.MemberID {
-			members[id] = member
-		}
-	}
-	config = cluster.Cluster{
-		MemberID: config.MemberID,
-		Members:  members,
-	}
 	client, err := NewClient(config, p.config)
 	if err != nil {
 		return err

@@ -43,17 +43,17 @@ func BenchmarkProtocol(b *testing.B) {
 		"foo": {
 			ID:   "foo",
 			Host: "localhost",
-			Port: 5678,
+			Port: 5679,
 		},
 		"bar": {
 			ID:   "bar",
 			Host: "localhost",
-			Port: 5679,
+			Port: 5680,
 		},
 		"baz": {
 			ID:   "baz",
 			Host: "localhost",
-			Port: 5680,
+			Port: 5681,
 		},
 	}
 
@@ -91,24 +91,19 @@ func BenchmarkProtocol(b *testing.B) {
 		},
 		Members: []*controller.NodeConfig{
 			{
-				ID:   "sequencer",
-				Host: "localhost",
-				Port: 5677,
-			},
-			{
 				ID:   "foo",
-				Host: "localhost",
-				Port: 5678,
-			},
-			{
-				ID:   "bar",
 				Host: "localhost",
 				Port: 5679,
 			},
 			{
-				ID:   "baz",
+				ID:   "bar",
 				Host: "localhost",
 				Port: 5680,
+			},
+			{
+				ID:   "baz",
+				Host: "localhost",
+				Port: 5681,
 			},
 		},
 	}

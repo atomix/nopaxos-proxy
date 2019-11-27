@@ -5,7 +5,8 @@ go 1.12
 require (
 	github.com/atomix/atomix-api v0.0.0-20191021183656-837bfda65c82
 	github.com/atomix/atomix-go-node v0.0.0-20191021234659-c841a97bec89
-	github.com/atomix/atomix-nopaxos-node v0.0.0-20191127081917-f94db05f2eeb
+	github.com/atomix/atomix-nopaxos-node v0.0.0-20191127201526-d45c3ef906d7
+	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/mock v1.3.1
 	github.com/golang/protobuf v1.3.2
