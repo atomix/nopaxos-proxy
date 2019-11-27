@@ -27,13 +27,13 @@ import (
 	"github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos/config"
 	"github.com/gogo/protobuf/proto"
 	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
+	"sync"
 	"testing"
 	"time"
 )
 
-func TestProtocol(t *testing.T) {
-	logrus.SetLevel(logrus.TraceLevel)
+func BenchmarkProtocol(b *testing.B) {
+	logrus.SetLevel(logrus.InfoLevel)
 
 	pingInterval := 1 * time.Second
 	leaderTimeout := 2 * time.Second
@@ -139,9 +139,32 @@ func TestProtocol(t *testing.T) {
 	})
 
 	client := protocol.Client()
-	ch := make(chan node2.Output)
-	go client.Write(context.Background(), bytes, ch)
-	out := <-ch
-	assert.Nil(t, out.Error)
-	assert.NotNil(t, out.Value)
+	b.Run("BenchmarkWrites", func(b *testing.B) {
+		//for i := 0; i < b.N; i++ {
+		//	ch := make(chan node2.Output)
+		//	go client.Write(context.Background(), bytes, ch)
+		//	<-ch
+		//}
+
+		ch := make(chan struct{}, 8)
+		wg := &sync.WaitGroup{}
+		for i := 0; i < 8; i++ {
+			wg.Add(1)
+			go func() {
+				for range ch {
+					ch := make(chan node2.Output)
+					_ = client.Write(context.Background(), bytes, ch)
+					<-ch
+				}
+				wg.Done()
+			}()
+		}
+
+		for n := 0; n < b.N; n++ {
+			ch <- struct{}{}
+		}
+		close(ch)
+
+		wg.Wait()
+	})
 }

@@ -26,6 +26,8 @@ import (
 	"time"
 )
 
+const queueSize = 1000
+
 // NewClient returns a new NOPaxos client
 func NewClient(config cluster.Cluster, sequencerConfig *SequencerConfig) (*Client, error) {
 	return newClient(NewCluster(config), sequencerConfig)
@@ -43,13 +45,18 @@ func newClient(cluster *Cluster, config *SequencerConfig) (*Client, error) {
 	}
 	quorum := int(math.Floor(float64(conns.Len())/2.0)) + 1
 	client := &Client{
-		cluster:  cluster,
-		config:   config,
-		conns:    conns,
-		quorum:   quorum,
-		commands: make(map[protocol.MessageID]*commandHandler),
-		queries:  make(map[protocol.MessageID]*queryHandler),
-		log:      util.NewNodeLogger(string(cluster.Member())),
+		logger:     util.NewNodeLogger("sequencer"),
+		cluster:    cluster,
+		config:     config,
+		conns:      conns,
+		writeChans: list.New(),
+		readChans:  list.New(),
+		quorum:     quorum,
+		commands:   make(map[protocol.MessageID]*commandHandler),
+		queries:    make(map[protocol.MessageID]*queryHandler),
+		writes:     make(chan *requestContext, queueSize),
+		reads:      make(chan *requestContext, queueSize),
+		log:        util.NewNodeLogger(string(cluster.Member())),
 	}
 	client.connect()
 	return client, nil
@@ -58,16 +65,21 @@ func newClient(cluster *Cluster, config *SequencerConfig) (*Client, error) {
 // Client is a service Client implementation for the NOPaxos consensus protocol
 type Client struct {
 	node.Client
-	cluster   *Cluster
-	config    *SequencerConfig
-	conns     *list.List
-	quorum    int
-	commandID protocol.MessageID
-	queryID   protocol.MessageID
-	commands  map[protocol.MessageID]*commandHandler
-	queries   map[protocol.MessageID]*queryHandler
-	mu        sync.RWMutex
-	log       util.Logger
+	logger     util.Logger
+	cluster    *Cluster
+	config     *SequencerConfig
+	conns      *list.List
+	writeChans *list.List
+	readChans  *list.List
+	quorum     int
+	commandID  protocol.MessageID
+	queryID    protocol.MessageID
+	commands   map[protocol.MessageID]*commandHandler
+	queries    map[protocol.MessageID]*queryHandler
+	writes     chan *requestContext
+	reads      chan *requestContext
+	mu         sync.RWMutex
+	log        util.Logger
 }
 
 func (c *Client) connect() {
@@ -75,8 +87,16 @@ func (c *Client) connect() {
 	for conn != nil {
 		stream := conn.Value.(protocol.ClientService_ClientStreamClient)
 		go c.receive(stream)
+		writeCh := make(chan *protocol.CommandRequest)
+		c.writeChans.PushBack(writeCh)
+		go c.sendWrites(stream, writeCh)
+		readCh := make(chan *protocol.QueryRequest)
+		c.readChans.PushBack(readCh)
+		go c.sendReads(stream, readCh)
 		conn = conn.Next()
 	}
+	go c.processWrites()
+	go c.processReads()
 }
 
 func (c *Client) receive(stream protocol.ClientService_ClientStreamClient) {
@@ -93,15 +113,11 @@ func (c *Client) receive(stream protocol.ClientService_ClientStreamClient) {
 			}
 			c.mu.Lock()
 			handler := c.commands[r.CommandReply.MessageNum]
-			complete := false
 			if handler != nil && handler.succeed(r.CommandReply.Value) {
 				delete(c.commands, r.CommandReply.MessageNum)
-				complete = true
-			}
-			c.mu.Unlock()
-			if complete {
 				handler.complete()
 			}
+			c.mu.Unlock()
 		case *protocol.ClientMessage_QueryReply:
 			if r.QueryReply.ViewID.SessionNum != c.config.SessionId {
 				continue
@@ -112,69 +128,116 @@ func (c *Client) receive(stream protocol.ClientService_ClientStreamClient) {
 
 // Write sends a write operation to the cluster
 func (c *Client) Write(ctx context.Context, in []byte, ch chan<- node.Output) error {
-	handler := &commandHandler{ch: ch, quorum: c.quorum}
-	c.mu.Lock()
-	messageID := c.commandID + 1
-	c.commandID = messageID
-	c.commands[messageID] = handler
-	c.mu.Unlock()
-
-	request := &protocol.CommandRequest{
-		SessionNum: c.config.SessionId,
-		MessageNum: messageID,
-		Timestamp:  time.Now(),
-		Value:      in,
+	c.writes <- &requestContext{
+		ctx:   ctx,
+		value: in,
+		ch:    ch,
 	}
-
-	go c.write(ctx, request, ch, handler)
 	return nil
 }
 
 // Read sends a read operation to the cluster
 func (c *Client) Read(ctx context.Context, in []byte, ch chan<- node.Output) error {
-	handler := &queryHandler{}
-	c.mu.Lock()
-	messageID := c.queryID + 1
-	c.queryID = messageID
-	c.queries[messageID] = handler
-	c.mu.Unlock()
-
-	request := &protocol.QueryRequest{
-		SessionNum: c.config.SessionId,
-		MessageNum: messageID,
-		Timestamp:  time.Now(),
-		Value:      in,
+	c.reads <- &requestContext{
+		ctx:   ctx,
+		value: in,
+		ch:    ch,
 	}
-
-	go c.read(ctx, request, ch, handler)
 	return nil
 }
 
-func (c *Client) write(ctx context.Context, request *protocol.CommandRequest, ch chan<- node.Output, handler *commandHandler) {
-	conn := c.conns.Front()
-	for conn != nil {
-		err := conn.Value.(protocol.ClientService_ClientStreamClient).Send(&protocol.ClientMessage{
+func (c *Client) processWrites() {
+	for context := range c.writes {
+		handler := &commandHandler{ch: context.ch, quorum: c.quorum}
+		messageID := c.commandID + 1
+		c.commandID = messageID
+		c.mu.Lock()
+		c.commands[messageID] = handler
+		c.mu.Unlock()
+
+		c.enqueueWrite(&protocol.CommandRequest{
+			SessionNum: c.config.SessionId,
+			MessageNum: messageID,
+			Timestamp:  time.Now(),
+			Value:      context.value,
+		})
+	}
+}
+
+func (c *Client) enqueueWrite(request *protocol.CommandRequest) {
+	c.logger.Request("CommandRequest", request)
+	element := c.writeChans.Front()
+	for element != nil {
+		ch := element.Value.(chan *protocol.CommandRequest)
+		ch <- request
+		element = element.Next()
+	}
+}
+
+func (c *Client) sendWrites(stream protocol.ClientService_ClientStreamClient, ch chan *protocol.CommandRequest) {
+	for request := range ch {
+		_ = stream.Send(&protocol.ClientMessage{
 			Message: &protocol.ClientMessage_Command{
 				Command: request,
 			},
 		})
-		if err != nil {
-			handler.fail()
-		}
-		conn = conn.Next()
 	}
 }
 
-func (c *Client) read(ctx context.Context, request *protocol.QueryRequest, ch chan<- node.Output, handler *queryHandler) {
-	conn := c.conns.Front()
-	for conn != nil {
-		_ = conn.Value.(protocol.ClientService_ClientStreamClient).Send(&protocol.ClientMessage{
+func (c *Client) processReads() {
+	for context := range c.reads {
+		handler := &queryHandler{ch: context.ch}
+		messageID := c.queryID + 1
+		c.queryID = messageID
+		c.mu.Lock()
+		c.queries[messageID] = handler
+		c.mu.Unlock()
+
+		c.enqueueRead(&protocol.QueryRequest{
+			SessionNum: c.config.SessionId,
+			MessageNum: messageID,
+			Timestamp:  time.Now(),
+			Value:      context.value,
+		})
+	}
+}
+
+func (c *Client) enqueueRead(request *protocol.QueryRequest) {
+	c.logger.Request("QueryRequest", request)
+	element := c.readChans.Front()
+	for element != nil {
+		ch := element.Value.(chan *protocol.QueryRequest)
+		ch <- request
+		element = element.Next()
+	}
+}
+
+func (c *Client) sendReads(stream protocol.ClientService_ClientStreamClient, ch chan *protocol.QueryRequest) {
+	for request := range ch {
+		_ = stream.Send(&protocol.ClientMessage{
 			Message: &protocol.ClientMessage_Query{
 				Query: request,
 			},
 		})
-		conn = conn.Next()
 	}
+}
+
+type requestContext struct {
+	ctx   context.Context
+	value []byte
+	ch    chan<- node.Output
+}
+
+type commandContext struct {
+	ctx     context.Context
+	request *protocol.CommandRequest
+	handler *commandHandler
+}
+
+type queryContext struct {
+	ctx     context.Context
+	request *protocol.QueryRequest
+	handler *queryHandler
 }
 
 // commandHandler is a quorum reply handler
