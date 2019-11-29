@@ -35,20 +35,11 @@ func NewClient(config cluster.Cluster, sequencerConfig *SequencerConfig) (*Clien
 
 // newClient returns a new NOPaxos client
 func newClient(cluster *Cluster, config *SequencerConfig) (*Client, error) {
-	conns := list.New()
-	for _, member := range cluster.Members() {
-		stream, err := cluster.GetStream(member)
-		if err != nil {
-			return nil, err
-		}
-		conns.PushBack(stream)
-	}
-	quorum := int(math.Floor(float64(conns.Len())/2.0)) + 1
+	quorum := int(math.Floor(float64(len(cluster.Members()))/2.0)) + 1
 	client := &Client{
 		logger:     util.NewNodeLogger("sequencer"),
 		cluster:    cluster,
 		config:     config,
-		conns:      conns,
 		writeChans: list.New(),
 		readChans:  list.New(),
 		quorum:     quorum,
@@ -58,7 +49,9 @@ func newClient(cluster *Cluster, config *SequencerConfig) (*Client, error) {
 		reads:      make(chan *requestContext, queueSize),
 		log:        util.NewNodeLogger(string(cluster.Member())),
 	}
-	client.connect()
+	if err := client.connect(cluster); err != nil {
+		return nil, err
+	}
 	return client, nil
 }
 
@@ -68,7 +61,6 @@ type Client struct {
 	logger     util.Logger
 	cluster    *Cluster
 	config     *SequencerConfig
-	conns      *list.List
 	writeChans *list.List
 	readChans  *list.List
 	quorum     int
@@ -82,24 +74,26 @@ type Client struct {
 	log        util.Logger
 }
 
-func (c *Client) connect() {
-	conn := c.conns.Front()
-	for conn != nil {
-		stream := conn.Value.(protocol.ClientService_ClientStreamClient)
-		go c.receive(stream)
+func (c *Client) connect(cluster *Cluster) error {
+	for _, member := range cluster.Members() {
+		stream, err := cluster.GetStream(member)
+		if err != nil {
+			return err
+		}
+		go c.receive(member, stream)
 		writeCh := make(chan *protocol.CommandRequest)
 		c.writeChans.PushBack(writeCh)
-		go c.sendWrites(stream, writeCh)
+		go c.sendWrites(member, stream, writeCh)
 		readCh := make(chan *protocol.QueryRequest)
 		c.readChans.PushBack(readCh)
-		go c.sendReads(stream, readCh)
-		conn = conn.Next()
+		go c.sendReads(member, stream, readCh)
 	}
 	go c.processWrites()
 	go c.processReads()
+	return nil
 }
 
-func (c *Client) receive(stream protocol.ClientService_ClientStreamClient) {
+func (c *Client) receive(member MemberID, stream protocol.ClientService_ClientStreamClient) {
 	for {
 		response, err := stream.Recv()
 		if err != nil {
@@ -111,6 +105,7 @@ func (c *Client) receive(stream protocol.ClientService_ClientStreamClient) {
 			if r.CommandReply.ViewID.SessionNum != c.config.SessionId {
 				continue
 			}
+			c.logger.ReceiveFrom("CommandReply", r.CommandReply, member)
 			c.mu.Lock()
 			handler := c.commands[r.CommandReply.MessageNum]
 			if handler != nil && handler.succeed(r.CommandReply.Value) {
@@ -122,6 +117,14 @@ func (c *Client) receive(stream protocol.ClientService_ClientStreamClient) {
 			if r.QueryReply.ViewID.SessionNum != c.config.SessionId {
 				continue
 			}
+			c.logger.ReceiveFrom("QueryReply", r.QueryReply, member)
+			c.mu.Lock()
+			handler := c.queries[r.QueryReply.MessageNum]
+			if handler != nil && handler.succeed(r.QueryReply.Value) {
+				delete(c.queries, r.QueryReply.MessageNum)
+				handler.complete()
+			}
+			c.mu.Unlock()
 		}
 	}
 }
@@ -165,7 +168,6 @@ func (c *Client) processWrites() {
 }
 
 func (c *Client) enqueueWrite(request *protocol.CommandRequest) {
-	c.logger.Request("CommandRequest", request)
 	element := c.writeChans.Front()
 	for element != nil {
 		ch := element.Value.(chan *protocol.CommandRequest)
@@ -174,8 +176,9 @@ func (c *Client) enqueueWrite(request *protocol.CommandRequest) {
 	}
 }
 
-func (c *Client) sendWrites(stream protocol.ClientService_ClientStreamClient, ch chan *protocol.CommandRequest) {
+func (c *Client) sendWrites(member MemberID, stream protocol.ClientService_ClientStreamClient, ch chan *protocol.CommandRequest) {
 	for request := range ch {
+		c.logger.SendTo("CommandRequest", request, member)
 		_ = stream.Send(&protocol.ClientMessage{
 			Message: &protocol.ClientMessage_Command{
 				Command: request,
@@ -203,7 +206,6 @@ func (c *Client) processReads() {
 }
 
 func (c *Client) enqueueRead(request *protocol.QueryRequest) {
-	c.logger.Request("QueryRequest", request)
 	element := c.readChans.Front()
 	for element != nil {
 		ch := element.Value.(chan *protocol.QueryRequest)
@@ -212,8 +214,9 @@ func (c *Client) enqueueRead(request *protocol.QueryRequest) {
 	}
 }
 
-func (c *Client) sendReads(stream protocol.ClientService_ClientStreamClient, ch chan *protocol.QueryRequest) {
+func (c *Client) sendReads(member MemberID, stream protocol.ClientService_ClientStreamClient, ch chan *protocol.QueryRequest) {
 	for request := range ch {
+		c.logger.SendTo("QueryRequest", request, member)
 		_ = stream.Send(&protocol.ClientMessage{
 			Message: &protocol.ClientMessage_Query{
 				Query: request,
@@ -228,18 +231,6 @@ type requestContext struct {
 	ch    chan<- node.Output
 }
 
-type commandContext struct {
-	ctx     context.Context
-	request *protocol.CommandRequest
-	handler *commandHandler
-}
-
-type queryContext struct {
-	ctx     context.Context
-	request *protocol.QueryRequest
-	handler *queryHandler
-}
-
 // commandHandler is a quorum reply handler
 type commandHandler struct {
 	quorum    int
@@ -249,38 +240,44 @@ type commandHandler struct {
 	ch        chan<- node.Output
 }
 
-func (r *commandHandler) succeed(value []byte) bool {
-	if r.value == nil && len(value) > 0 {
-		r.value = value
+func (h *commandHandler) succeed(value []byte) bool {
+	if h.value == nil && len(value) > 0 {
+		h.value = value
 	}
-	r.succeeded++
-	return r.value != nil && r.succeeded >= r.quorum
+	h.succeeded++
+	return h.value != nil && h.succeeded >= h.quorum
 }
 
-func (r *commandHandler) fail() bool {
-	r.failed++
-	return r.failed >= r.quorum
+func (h *commandHandler) fail() bool {
+	h.failed++
+	return h.failed >= h.quorum
 }
 
-func (r *commandHandler) complete() {
-	r.ch <- node.Output{
-		Value: r.value,
+func (h *commandHandler) complete() {
+	h.ch <- node.Output{
+		Value: h.value,
 	}
 }
 
 // queryHandler is a query reply handler
 type queryHandler struct {
-	ch chan<- node.Output
+	ch    chan<- node.Output
+	value []byte
 }
 
-func (r *queryHandler) succeed(value []byte) bool {
-	if len(value) > 0 {
-		r.ch <- node.Output{
-			Value: value,
-		}
-		return true
+func (h *queryHandler) succeed(value []byte) bool {
+	h.value = value
+	return h.value != nil
+}
+
+func (h *queryHandler) fail() bool {
+	return true
+}
+
+func (h *queryHandler) complete() {
+	h.ch <- node.Output{
+		Value: h.value,
 	}
-	return false
 }
 
 // Close closes the client
