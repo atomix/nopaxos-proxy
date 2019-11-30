@@ -17,17 +17,19 @@ package nopaxos
 import (
 	"context"
 	"github.com/atomix/atomix-api/proto/atomix/controller"
+	"github.com/atomix/atomix-go-client/pkg/client/map"
+	primitive2 "github.com/atomix/atomix-go-client/pkg/client/primitive"
 	"github.com/atomix/atomix-go-node/pkg/atomix"
 	"github.com/atomix/atomix-go-node/pkg/atomix/cluster"
 	"github.com/atomix/atomix-go-node/pkg/atomix/counter"
-	node2 "github.com/atomix/atomix-go-node/pkg/atomix/node"
 	"github.com/atomix/atomix-go-node/pkg/atomix/registry"
 	"github.com/atomix/atomix-go-node/pkg/atomix/service"
 	"github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos"
 	"github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos/config"
 	"github.com/gogo/protobuf/proto"
 	"github.com/sirupsen/logrus"
-	"sync"
+	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc"
 	"testing"
 	"time"
 )
@@ -133,33 +135,56 @@ func BenchmarkProtocol(b *testing.B) {
 		},
 	})
 
-	client := protocol.Client()
+	conn, err := grpc.Dial("localhost:5678", grpc.WithInsecure())
+	assert.NoError(b, err)
+	//client := counter2.NewCounterServiceClient(conn)
+
+	//counter, err := counter3.New(context.Background(), primitive2.Name{Name: "test", Namespace: "test"}, []*grpc.ClientConn{conn})
+	//assert.NoError(b, err)
+
+	m, err := _map.New(context.Background(), primitive2.Name{Name: "test", Namespace: "test"}, []*grpc.ClientConn{conn})
+	assert.NoError(b, err)
+
 	b.Run("BenchmarkWrites", func(b *testing.B) {
 		//for i := 0; i < b.N; i++ {
-		//	ch := make(chan node2.Output)
-		//	go client.Write(context.Background(), bytes, ch)
-		//	<-ch
+		//	_, _ = counter.Increment(context.Background(), 1)
 		//}
 
-		ch := make(chan struct{}, 8)
-		wg := &sync.WaitGroup{}
-		for i := 0; i < 8; i++ {
-			wg.Add(1)
-			go func() {
-				for range ch {
-					ch := make(chan node2.Output)
-					_ = client.Write(context.Background(), bytes, ch)
-					<-ch
-				}
-				wg.Done()
-			}()
+		for i := 0; i < b.N; i++ {
+			_, _ = m.Put(context.Background(), "foo", []byte("bar"))
 		}
 
-		for n := 0; n < b.N; n++ {
-			ch <- struct{}{}
-		}
-		close(ch)
+		//for i := 1; i <= b.N; i++ {
+		//	_, _ = client.Increment(context.Background(), &counter2.IncrementRequest{
+		//		Header: &headers.RequestHeader{
+		//			Name: &primitive.Name{
+		//				Name:      "test",
+		//				Namespace: "test",
+		//			},
+		//			RequestID: uint64(i),
+		//		},
+		//	})
+		//}
 
-		wg.Wait()
+		//ch := make(chan struct{}, 8)
+		//wg := &sync.WaitGroup{}
+		//for i := 0; i < 8; i++ {
+		//	wg.Add(1)
+		//	go func() {
+		//		for range ch {
+		//			ch := make(chan node2.Output)
+		//			_ = client.Write(context.Background(), bytes, ch)
+		//			<-ch
+		//		}
+		//		wg.Done()
+		//	}()
+		//}
+
+		//for n := 0; n < b.N; n++ {
+		//	ch <- struct{}{}
+		//}
+		//close(ch)
+
+		//wg.Wait()
 	})
 }

@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/atomix/atomix-api v0.0.0-20191021183656-837bfda65c82
+	github.com/atomix/atomix-go-client v0.0.0-20191127222459-36981d701c6e
 	github.com/atomix/atomix-go-node v0.0.0-20191130003522-53d52c9deb5c
 	github.com/atomix/atomix-nopaxos-node v0.0.0-20191130003641-1e2faf108d01
 	github.com/cenkalti/backoff v2.2.1+incompatible

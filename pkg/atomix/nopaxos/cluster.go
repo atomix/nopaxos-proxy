@@ -104,11 +104,11 @@ func (c *Cluster) GetStream(member MemberID) (protocol.ClientService_ClientStrea
 	c.mu.RUnlock()
 	if !ok {
 		c.mu.Lock()
+		defer c.mu.Unlock()
 		stream, ok = c.streams[member]
 		if !ok {
 			conn, err := c.getConn(member)
 			if err != nil {
-				c.mu.Unlock()
 				return nil, err
 			}
 			client := protocol.NewClientServiceClient(conn)
@@ -117,7 +117,6 @@ func (c *Cluster) GetStream(member MemberID) (protocol.ClientService_ClientStrea
 				return nil, err
 			}
 			c.streams[member] = stream
-			c.mu.Unlock()
 		}
 	}
 	return stream, nil

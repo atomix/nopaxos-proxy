@@ -15,6 +15,8 @@ github.com/atomix/atomix-go-client v0.0.0-20190827234201-188602d4e780/go.mod h1:
 github.com/atomix/atomix-go-client v0.0.0-20191002230120-837d618e27c5/go.mod h1:MoPkrAL33saKe2GbTi+NJgLzW7ejCwrrLDrYIwGYNcE=
 github.com/atomix/atomix-go-client v0.0.0-20191015003555-98ae5ccbe7bd/go.mod h1:jV1V8j+zo30xhC+hufKM/1XIiJKA3ODjwuMA/rBHu8g=
 github.com/atomix/atomix-go-client v0.0.0-20191018192841-3644d110cbec/go.mod h1:bM51i8VXdxw3+vN5spPJWllkfsfpakHYo2bOkNj1xC4=
+github.com/atomix/atomix-go-client v0.0.0-20191127222459-36981d701c6e h1:aLn+oZd73fkB11hrCGuqpFPug7rleIT0cCxloffYzMM=
+github.com/atomix/atomix-go-client v0.0.0-20191127222459-36981d701c6e/go.mod h1:3VrFe1rCx3N6puiQOS0L9XoReGSaapaSH9pVZ3vW614=
 github.com/atomix/atomix-go-local v0.0.0-20190827233944-938e35b06834/go.mod h1:qLBTOiVKoEqzYOjgxIgWFa+Hfa3SR+VexA6jGBcv0HA=
 github.com/atomix/atomix-go-local v0.0.0-20190828183508-3db728c0fc3b/go.mod h1:VnwyXJvHzUHuVzzTmPhZ6/ktbBnz3CZk3aKMX7VlTmY=
 github.com/atomix/atomix-go-local v0.0.0-20190830183800-73f964b0f75a/go.mod h1:lt/qUsFF29yT2ofmxOXfFzIz0poN22/Qa5SPdalgTKw=
@@ -24,6 +26,7 @@ github.com/atomix/atomix-go-local v0.0.0-20191005004851-a9403b577637/go.mod h1:s
 github.com/atomix/atomix-go-local v0.0.0-20191005233404-a691d226511f/go.mod h1:6uWLpSvA1yC0uJvG46qQ93jhGsYxjUJA+c2Mw6rts4c=
 github.com/atomix/atomix-go-local v0.0.0-20191015003449-684edaca8be2/go.mod h1:ujkEG47qSxq/VPEs/iz9SXA9zhuHrzkADfta8Px7l6s=
 github.com/atomix/atomix-go-local v0.0.0-20191018192811-4de2cabe75ef/go.mod h1:L+GH0tZ1TrF+T/KrzgIKL1evb5x+V+ABBEYeHFcxEZ8=
+github.com/atomix/atomix-go-local v0.0.0-20191021234710-cca1c26bf4d8/go.mod h1:oRfnzGG5NU/uAQclc6chtLQ97/7WC5u+4t8lDouZIIE=
 github.com/atomix/atomix-go-node v0.0.0-20190827191929-2d3dc9c550d9/go.mod h1:PL1T5R78itch1QC1CN4JmbRL/2XQlg4R95R14822C6Q=
 github.com/atomix/atomix-go-node v0.0.0-20190828183436-fc30340cd8db/go.mod h1:dyh8Bb50qKfMlpqDE6X+dQ1tZ399WKEABa3ntDYImnA=
 github.com/atomix/atomix-go-node v0.0.0-20190830183721-649263a17223/go.mod h1:KJxB/MAgndAbyCOqTV2hatw7lExiZZs7QCOr45IfC9U=
@@ -71,6 +74,7 @@ github.com/gogo/protobuf v1.2.1 h1:/s5zKNz0uPFCZ5hddgPdo2TK2TVrUNMn0OOX8/aZMTE=
 github.com/gogo/protobuf v1.2.1/go.mod h1:hp+jE20tsWTFYpLwKvXlhS1hjn+gTNwPg2I6zVXpSg4=
 github.com/gogo/protobuf v1.3.1 h1:DqDEcV5aeaTmdFBePNpYsp3FlcVH/2ISVVM9Qf8PSls=
 github.com/gogo/protobuf v1.3.1/go.mod h1:SlYgWuQ5SjCEi6WLHjHCa1yvBfUnHcTbrrZtXPKa29o=
+github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b h1:VKtxabqXZkF25pY9ekfRL6a582T4P37/31XEstQ5p58=
 github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b/go.mod h1:SBH7ygxi8pfUlaOkMMuAQtPIUF8ecWP5IEl/CR7VP2Q=
 github.com/golang/mock v1.1.1/go.mod h1:oTYuIxOrZwtPieC+H1uAHpcLFnEyAGVDL/k47Jfbm0A=
 github.com/golang/mock v1.2.0/go.mod h1:oTYuIxOrZwtPieC+H1uAHpcLFnEyAGVDL/k47Jfbm0A=
