@@ -36,6 +36,8 @@ github.com/atomix/atomix-go-node v0.0.0-20191015003435-f70de243fb25/go.mod h1:Lt
 github.com/atomix/atomix-go-node v0.0.0-20191018192345-6fbb86e5f5ef/go.mod h1:SmM+sWPwscnx6AIqGbu9Y2EqCGdUlyHTnrJa/A3XqWA=
 github.com/atomix/atomix-go-node v0.0.0-20191021234659-c841a97bec89 h1:Xe8eyruUnCkTRlZbg+BWXGICFgMB0+82bcmIgHY1S+s=
 github.com/atomix/atomix-go-node v0.0.0-20191021234659-c841a97bec89/go.mod h1:wLJ9+8FK7p8R8tz3bXPQ6GTvpwhkwjyPomkL9ok5AzM=
+github.com/atomix/atomix-go-node v0.0.0-20191130003522-53d52c9deb5c h1:CbSpiUH5rkrcp5jG/5ZVNNfNIad7WS8+f01OBlEshcQ=
+github.com/atomix/atomix-go-node v0.0.0-20191130003522-53d52c9deb5c/go.mod h1:wLJ9+8FK7p8R8tz3bXPQ6GTvpwhkwjyPomkL9ok5AzM=
 github.com/atomix/atomix-nopaxos-node v0.0.0-20191124182341-6a63d8cbfdc7 h1:dDAFO8yypxFUqvuixuW0pXgiqeBPawsr/dawrIxvgjo=
 github.com/atomix/atomix-nopaxos-node v0.0.0-20191124182341-6a63d8cbfdc7/go.mod h1:Zmb1oAf/LNXsRuKmO/62RaQxuo9avit50uVr3JNjMxU=
 github.com/atomix/atomix-nopaxos-node v0.0.0-20191124183430-e2925ae1d78d h1:LKLt8fj/0Ly9ZGoJqp4++HJAaKSweFETfBywIc0me+k=
@@ -52,6 +54,12 @@ github.com/atomix/atomix-nopaxos-node v0.0.0-20191127081917-f94db05f2eeb h1:5Ue3
 github.com/atomix/atomix-nopaxos-node v0.0.0-20191127081917-f94db05f2eeb/go.mod h1:ZxncDNpka/XoqCEZFHfCkQ/Wo98eu0jb6uU86AAc2/Q=
 github.com/atomix/atomix-nopaxos-node v0.0.0-20191127201526-d45c3ef906d7 h1:lo2J2mcjR5bvFDVEZqL0foHIkKyiXY5ci1/tYJ68miM=
 github.com/atomix/atomix-nopaxos-node v0.0.0-20191127201526-d45c3ef906d7/go.mod h1:OJu8JKMv3iyfTmX3sIIRqwFndh9T/HO2fFV+XyrQNDc=
+github.com/atomix/atomix-nopaxos-node v0.0.0-20191129221052-ebf94479085e h1:lb7wa/J6Dtwnx78d5mDwbVKCGSMI9gGh6kAo+JhSI9Y=
+github.com/atomix/atomix-nopaxos-node v0.0.0-20191129221052-ebf94479085e/go.mod h1:OJu8JKMv3iyfTmX3sIIRqwFndh9T/HO2fFV+XyrQNDc=
+github.com/atomix/atomix-nopaxos-node v0.0.0-20191129221427-c3b7055efaa2 h1:9t3UjLwop7Khw9cYZk52bxF5siCXlzniKne9s0g5So0=
+github.com/atomix/atomix-nopaxos-node v0.0.0-20191129221427-c3b7055efaa2/go.mod h1:OJu8JKMv3iyfTmX3sIIRqwFndh9T/HO2fFV+XyrQNDc=
+github.com/atomix/atomix-nopaxos-node v0.0.0-20191130003641-1e2faf108d01 h1:o8lMvRjel2zEONkRgOaxhRakLIHBwl+Ol8Ag7seDDN8=
+github.com/atomix/atomix-nopaxos-node v0.0.0-20191130003641-1e2faf108d01/go.mod h1:Rs/BuoLyTwj92EeU8+t61e46tcRA9j1xxkARePRFXeE=
 github.com/cenkalti/backoff v2.2.1+incompatible h1:tNowT99t7UNflLxfYYSlKYsBpXdEet03Pg2g16Swow4=
 github.com/cenkalti/backoff v2.2.1+incompatible/go.mod h1:90ReRw6GdpyfrHakVjL/QHaoyV4aDUVVkXQJJJ3NXXM=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
