@@ -146,23 +146,23 @@ func (c *Client) receive(member MemberID, stream protocol.ClientService_ClientSt
 			c.logger.ReceiveFrom("CommandClose", r.CommandClose, member)
 			c.mu.Lock()
 			handler := c.commands[r.CommandClose.MessageNum]
+			delete(c.commands, r.CommandClose.MessageNum)
+			c.mu.Unlock()
 			if handler != nil {
-				delete(c.commands, r.CommandClose.MessageNum)
 				handler.complete()
 			}
-			c.mu.Unlock()
 		case *protocol.ClientMessage_QueryReply:
 			if r.QueryReply.ViewID.SessionNum != c.config.SessionId {
 				continue
 			}
 			c.logger.ReceiveFrom("QueryReply", r.QueryReply, member)
 			if r.QueryReply.Value != nil {
-				c.mu.Lock()
+				c.mu.RLock()
 				handler := c.queries[r.QueryReply.MessageNum]
+				c.mu.RUnlock()
 				if handler != nil {
 					handler.receive(r.QueryReply.Value)
 				}
-				c.mu.Unlock()
 			}
 		case *protocol.ClientMessage_QueryClose:
 			if r.QueryClose.ViewID.SessionNum != c.config.SessionId {
@@ -171,11 +171,11 @@ func (c *Client) receive(member MemberID, stream protocol.ClientService_ClientSt
 			c.logger.ReceiveFrom("QueryReply", r.QueryClose, member)
 			c.mu.Lock()
 			handler := c.queries[r.QueryClose.MessageNum]
+			delete(c.queries, r.QueryClose.MessageNum)
+			c.mu.Unlock()
 			if handler != nil {
-				delete(c.queries, r.QueryClose.MessageNum)
 				handler.complete()
 			}
-			c.mu.Unlock()
 		}
 	}
 }
@@ -284,47 +284,56 @@ type requestContext struct {
 
 func (c *Client) newCommandHandler(ch chan<- node.Output) *commandHandler {
 	return &commandHandler{
-		values: make(map[protocol.LogSlotID]*list.List),
+		values: list.New(),
 		ch:     ch,
 	}
 }
 
 // commandHandler is a quorum reply handler
 type commandHandler struct {
-	values map[protocol.LogSlotID]*list.List
+	values *list.List
 	ch     chan<- node.Output
 }
 
 func (h *commandHandler) receive(slotNum protocol.LogSlotID, value []byte) {
-	values := h.values[slotNum]
-	if values == nil {
-		values = list.New()
-		h.values[slotNum] = values
+	slotIndex := uint64(slotNum)
+	element := h.values.Back()
+	if element != nil {
+		slot := element.Value.(*list.List)
+		output := slot.Front().Value.(node.Output)
+		if output.Index == slotIndex {
+			slot.PushBack(node.Output{
+				Index: slotIndex,
+				Value: value,
+			})
+			return
+		}
 	}
-	values.PushBack(value)
+	slot := list.New()
+	slot.PushBack(node.Output{
+		Index: slotIndex,
+		Value: value,
+	})
+	h.values.PushBack(slot)
 }
 
 func (h *commandHandler) commit(slotNum protocol.LogSlotID) {
-	slots := make([]protocol.LogSlotID, 0, len(h.values))
-	for slot := range h.values {
-		slots = append(slots, slot)
-	}
-	sort.Slice(slots, func(i, j int) bool {
-		return slots[i] < slots[j]
-	})
-	for _, slot := range slots {
-		if slot > slotNum {
-			return
-		}
-		values := h.values[slot]
-		element := values.Front()
-		for element != nil {
-			h.ch <- node.Output{
-				Value: element.Value.([]byte),
+	slotIndex := uint64(slotNum)
+	element := h.values.Front()
+	for element != nil {
+		slot := element.Value.(*list.List)
+		slotElement := slot.Front()
+		for slotElement != nil {
+			output := slotElement.Value.(node.Output)
+			if output.Index > slotIndex {
+				return
 			}
-			element = element.Next()
+			h.ch <- output
+			slotElement = slotElement.Next()
 		}
-		delete(h.values, slot)
+		next := element.Next()
+		h.values.Remove(element)
+		element = next
 	}
 }
 
