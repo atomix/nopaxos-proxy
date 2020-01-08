@@ -19,6 +19,7 @@ import (
 	"context"
 	"github.com/atomix/atomix-go-node/pkg/atomix/cluster"
 	"github.com/atomix/atomix-go-node/pkg/atomix/node"
+	"github.com/atomix/atomix-go-node/pkg/atomix/stream"
 	"github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos/protocol"
 	"github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos/util"
 	"math"
@@ -79,6 +80,18 @@ type Client struct {
 	reads      chan *requestContext
 	mu         sync.RWMutex
 	log        util.Logger
+}
+
+func (c *Client) MustLeader() bool {
+	return false
+}
+
+func (c *Client) IsLeader() bool {
+	return true
+}
+
+func (c *Client) Leader() string {
+	return string(c.cluster.Member())
 }
 
 func (c *Client) connect(cluster *Cluster) error {
@@ -181,28 +194,28 @@ func (c *Client) receive(member MemberID, stream protocol.ClientService_ClientSt
 }
 
 // Write sends a write operation to the cluster
-func (c *Client) Write(ctx context.Context, in []byte, ch chan<- node.Output) error {
+func (c *Client) Write(ctx context.Context, in []byte, stream stream.Stream) error {
 	c.writes <- &requestContext{
-		ctx:   ctx,
-		value: in,
-		ch:    ch,
+		ctx:    ctx,
+		value:  in,
+		stream: stream,
 	}
 	return nil
 }
 
 // Read sends a read operation to the cluster
-func (c *Client) Read(ctx context.Context, in []byte, ch chan<- node.Output) error {
+func (c *Client) Read(ctx context.Context, in []byte, stream stream.Stream) error {
 	c.reads <- &requestContext{
-		ctx:   ctx,
-		value: in,
-		ch:    ch,
+		ctx:    ctx,
+		value:  in,
+		stream: stream,
 	}
 	return nil
 }
 
 func (c *Client) processWrites() {
 	for context := range c.writes {
-		handler := c.newCommandHandler(context.ch)
+		handler := c.newCommandHandler(context.stream)
 		messageID := c.commandID + 1
 		c.commandID = messageID
 		c.mu.Lock()
@@ -240,7 +253,7 @@ func (c *Client) sendWrites(member MemberID, stream protocol.ClientService_Clien
 
 func (c *Client) processReads() {
 	for context := range c.reads {
-		handler := &queryHandler{ch: context.ch}
+		handler := &queryHandler{stream: context.stream}
 		messageID := c.queryID + 1
 		c.queryID = messageID
 		c.mu.Lock()
@@ -277,22 +290,22 @@ func (c *Client) sendReads(member MemberID, stream protocol.ClientService_Client
 }
 
 type requestContext struct {
-	ctx   context.Context
-	value []byte
-	ch    chan<- node.Output
+	ctx    context.Context
+	value  []byte
+	stream stream.Stream
 }
 
-func (c *Client) newCommandHandler(ch chan<- node.Output) *commandHandler {
+func (c *Client) newCommandHandler(stream stream.Stream) *commandHandler {
 	return &commandHandler{
 		values: list.New(),
-		ch:     ch,
+		stream: stream,
 	}
 }
 
 // commandHandler is a quorum reply handler
 type commandHandler struct {
 	values *list.List
-	ch     chan<- node.Output
+	stream stream.Stream
 }
 
 func (h *commandHandler) receive(slotNum protocol.LogSlotID, value []byte) {
@@ -300,19 +313,23 @@ func (h *commandHandler) receive(slotNum protocol.LogSlotID, value []byte) {
 	element := h.values.Back()
 	if element != nil {
 		slot := element.Value.(*list.List)
-		output := slot.Front().Value.(node.Output)
-		if output.Index == slotIndex {
-			slot.PushBack(node.Output{
-				Index: slotIndex,
-				Value: value,
+		result := slot.Front().Value.(indexedResult)
+		if result.index == slotIndex {
+			slot.PushBack(indexedResult{
+				index: slotIndex,
+				result: stream.Result{
+					Value: value,
+				},
 			})
 			return
 		}
 	}
 	slot := list.New()
-	slot.PushBack(node.Output{
-		Index: slotIndex,
-		Value: value,
+	slot.PushBack(indexedResult{
+		index: slotIndex,
+		result: stream.Result{
+			Value: value,
+		},
 	})
 	h.values.PushBack(slot)
 }
@@ -324,11 +341,11 @@ func (h *commandHandler) commit(slotNum protocol.LogSlotID) {
 		slot := element.Value.(*list.List)
 		slotElement := slot.Front()
 		for slotElement != nil {
-			output := slotElement.Value.(node.Output)
-			if output.Index > slotIndex {
+			result := slotElement.Value.(indexedResult)
+			if result.index > slotIndex {
 				return
 			}
-			h.ch <- output
+			h.stream.Send(result.result)
 			slotElement = slotElement.Next()
 		}
 		next := element.Next()
@@ -338,22 +355,25 @@ func (h *commandHandler) commit(slotNum protocol.LogSlotID) {
 }
 
 func (h *commandHandler) complete() {
-	close(h.ch)
+	h.stream.Close()
 }
 
 // queryHandler is a query reply handler
 type queryHandler struct {
-	ch chan<- node.Output
+	stream stream.Stream
 }
 
 func (h *queryHandler) receive(value []byte) {
-	h.ch <- node.Output{
-		Value: value,
-	}
+	h.stream.Value(value)
 }
 
 func (h *queryHandler) complete() {
-	close(h.ch)
+	h.stream.Close()
+}
+
+type indexedResult struct {
+	index  uint64
+	result stream.Result
 }
 
 // Close closes the client

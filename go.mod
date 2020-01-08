@@ -3,10 +3,10 @@ module github.com/atomix/atomix-nopaxos-sequencer
 go 1.12
 
 require (
-	github.com/atomix/atomix-api v0.0.0-20191021183656-837bfda65c82
+	github.com/atomix/atomix-api v0.0.0-20191219205733-d87d186a4fba
 	github.com/atomix/atomix-go-client v0.0.0-20191127222459-36981d701c6e
-	github.com/atomix/atomix-go-node v0.0.0-20191130003522-53d52c9deb5c
-	github.com/atomix/atomix-nopaxos-node v0.0.0-20191130003641-1e2faf108d01
+	github.com/atomix/atomix-go-node v0.0.0-20200108075738-abed9e2478db
+	github.com/atomix/atomix-nopaxos-node v0.0.0-20200108183526-569e0d3b07e7
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/mock v1.3.1

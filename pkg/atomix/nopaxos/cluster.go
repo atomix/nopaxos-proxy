@@ -86,7 +86,7 @@ func (c *Cluster) getConn(member MemberID) (*grpc.ClientConn, error) {
 		}
 
 		conn, err := grpc.Dial(
-			fmt.Sprintf("%s:%d", location.Host, location.Port),
+			fmt.Sprintf("%s:%d", location.Host, location.ProtocolPort),
 			grpc.WithInsecure(),
 			grpc.WithStreamInterceptor(util.RetryingStreamClientInterceptor(retryPeriod)))
 		if err != nil {
