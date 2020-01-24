@@ -5,7 +5,7 @@ package nopaxos
 
 import (
 	fmt "fmt"
-	github_com_atomix_atomix_nopaxos_node_pkg_atomix_nopaxos_protocol "github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos/protocol"
+	github_com_atomix_atomix_nopaxos_node_pkg_atomix_nopaxos_protocol "github.com/atomix/nopaxos-replica/pkg/atomix/nopaxos/protocol"
 	_ "github.com/gogo/protobuf/gogoproto"
 	proto "github.com/gogo/protobuf/proto"
 	io "io"
@@ -26,7 +26,7 @@ const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
 // SequencerConfig is the sequencer configuration
 type SequencerConfig struct {
-	SessionId github_com_atomix_atomix_nopaxos_node_pkg_atomix_nopaxos_protocol.SessionID `protobuf:"varint,1,opt,name=session_id,json=sessionId,proto3,casttype=github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos/protocol.SessionID" json:"session_id,omitempty"`
+	SessionId github_com_atomix_atomix_nopaxos_node_pkg_atomix_nopaxos_protocol.SessionID `protobuf:"varint,1,opt,name=session_id,json=sessionId,proto3,casttype=github.com/atomix/nopaxos-replica/pkg/atomix/nopaxos/protocol.SessionID" json:"session_id,omitempty"`
 }
 
 func (m *SequencerConfig) Reset()         { *m = SequencerConfig{} }

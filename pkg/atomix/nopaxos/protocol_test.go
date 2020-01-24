@@ -16,20 +16,20 @@ package nopaxos
 
 import (
 	"context"
-	"github.com/atomix/atomix-api/proto/atomix/controller"
-	"github.com/atomix/atomix-go-client/pkg/client/map"
-	primitive2 "github.com/atomix/atomix-go-client/pkg/client/primitive"
-	"github.com/atomix/atomix-go-node/pkg/atomix"
-	"github.com/atomix/atomix-go-node/pkg/atomix/cluster"
-	"github.com/atomix/atomix-go-node/pkg/atomix/counter"
-	"github.com/atomix/atomix-go-node/pkg/atomix/registry"
-	"github.com/atomix/atomix-go-node/pkg/atomix/service"
-	"github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos"
-	"github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos/config"
+	"github.com/atomix/api/proto/atomix/controller"
+	"github.com/atomix/go-client/pkg/client/map"
+	primitive2 "github.com/atomix/go-client/pkg/client/primitive"
+	"github.com/atomix/go-client/pkg/client/util/net"
+	"github.com/atomix/go-framework/pkg/atomix"
+	"github.com/atomix/go-framework/pkg/atomix/cluster"
+	"github.com/atomix/go-framework/pkg/atomix/counter"
+	"github.com/atomix/go-framework/pkg/atomix/registry"
+	"github.com/atomix/go-framework/pkg/atomix/service"
+	"github.com/atomix/nopaxos-replica/pkg/atomix/nopaxos"
+	"github.com/atomix/nopaxos-replica/pkg/atomix/nopaxos/config"
 	"github.com/gogo/protobuf/proto"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/grpc"
 	"testing"
 	"time"
 )
@@ -43,19 +43,19 @@ func BenchmarkProtocol(b *testing.B) {
 
 	members := map[string]cluster.Member{
 		"foo": {
-			ID:   "foo",
-			Host: "localhost",
-			Port: 5679,
+			ID:           "foo",
+			Host:         "localhost",
+			ProtocolPort: 5679,
 		},
 		"bar": {
-			ID:   "bar",
-			Host: "localhost",
-			Port: 5680,
+			ID:           "bar",
+			Host:         "localhost",
+			ProtocolPort: 5680,
 		},
 		"baz": {
-			ID:   "baz",
-			Host: "localhost",
-			Port: 5681,
+			ID:           "baz",
+			Host:         "localhost",
+			ProtocolPort: 5681,
 		},
 	}
 
@@ -135,14 +135,12 @@ func BenchmarkProtocol(b *testing.B) {
 		},
 	})
 
-	conn, err := grpc.Dial("localhost:5678", grpc.WithInsecure())
-	assert.NoError(b, err)
 	//client := counter2.NewCounterServiceClient(conn)
 
 	//counter, err := counter3.New(context.Background(), primitive2.Name{Name: "test", Namespace: "test"}, []*grpc.ClientConn{conn})
 	//assert.NoError(b, err)
 
-	m, err := _map.New(context.Background(), primitive2.Name{Name: "test", Namespace: "test"}, []*grpc.ClientConn{conn})
+	m, err := _map.New(context.Background(), primitive2.Name{Name: "test", Namespace: "test"}, []net.Address{"localhost:5678"})
 	assert.NoError(b, err)
 
 	b.Run("BenchmarkWrites", func(b *testing.B) {

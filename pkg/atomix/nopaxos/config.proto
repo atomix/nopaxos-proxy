@@ -26,5 +26,5 @@ option (gogoproto.equal_all) = true;
 
 // SequencerConfig is the sequencer configuration
 message SequencerConfig {
-    uint64 session_id = 1 [(gogoproto.casttype) = "github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos/protocol.SessionID"];
+    uint64 session_id = 1 [(gogoproto.casttype) = "github.com/atomix/nopaxos-replica/pkg/atomix/nopaxos/protocol.SessionID"];
 }

@@ -15,8 +15,8 @@
 package nopaxos
 
 import (
-	"github.com/atomix/atomix-go-node/pkg/atomix/cluster"
-	"github.com/atomix/atomix-go-node/pkg/atomix/node"
+	"github.com/atomix/go-framework/pkg/atomix/cluster"
+	"github.com/atomix/go-framework/pkg/atomix/node"
 )
 
 // NewProtocol returns a new NOPaxos Protocol instance

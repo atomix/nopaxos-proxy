@@ -17,11 +17,11 @@ package nopaxos
 import (
 	"container/list"
 	"context"
-	"github.com/atomix/atomix-go-node/pkg/atomix/cluster"
-	"github.com/atomix/atomix-go-node/pkg/atomix/node"
-	"github.com/atomix/atomix-go-node/pkg/atomix/stream"
-	"github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos/protocol"
-	"github.com/atomix/atomix-nopaxos-node/pkg/atomix/nopaxos/util"
+	"github.com/atomix/go-framework/pkg/atomix/cluster"
+	"github.com/atomix/go-framework/pkg/atomix/node"
+	"github.com/atomix/go-framework/pkg/atomix/stream"
+	"github.com/atomix/nopaxos-replica/pkg/atomix/nopaxos/protocol"
+	"github.com/atomix/nopaxos-replica/pkg/atomix/nopaxos/util"
 	"math"
 	"sort"
 	"sync"
@@ -194,7 +194,7 @@ func (c *Client) receive(member MemberID, stream protocol.ClientService_ClientSt
 }
 
 // Write sends a write operation to the cluster
-func (c *Client) Write(ctx context.Context, in []byte, stream stream.Stream) error {
+func (c *Client) Write(ctx context.Context, in []byte, stream stream.WriteStream) error {
 	c.writes <- &requestContext{
 		ctx:    ctx,
 		value:  in,
@@ -204,7 +204,7 @@ func (c *Client) Write(ctx context.Context, in []byte, stream stream.Stream) err
 }
 
 // Read sends a read operation to the cluster
-func (c *Client) Read(ctx context.Context, in []byte, stream stream.Stream) error {
+func (c *Client) Read(ctx context.Context, in []byte, stream stream.WriteStream) error {
 	c.reads <- &requestContext{
 		ctx:    ctx,
 		value:  in,
@@ -292,10 +292,10 @@ func (c *Client) sendReads(member MemberID, stream protocol.ClientService_Client
 type requestContext struct {
 	ctx    context.Context
 	value  []byte
-	stream stream.Stream
+	stream stream.WriteStream
 }
 
-func (c *Client) newCommandHandler(stream stream.Stream) *commandHandler {
+func (c *Client) newCommandHandler(stream stream.WriteStream) *commandHandler {
 	return &commandHandler{
 		values: list.New(),
 		stream: stream,
@@ -305,7 +305,7 @@ func (c *Client) newCommandHandler(stream stream.Stream) *commandHandler {
 // commandHandler is a quorum reply handler
 type commandHandler struct {
 	values *list.List
-	stream stream.Stream
+	stream stream.WriteStream
 }
 
 func (h *commandHandler) receive(slotNum protocol.LogSlotID, value []byte) {
@@ -360,7 +360,7 @@ func (h *commandHandler) complete() {
 
 // queryHandler is a query reply handler
 type queryHandler struct {
-	stream stream.Stream
+	stream stream.WriteStream
 }
 
 func (h *queryHandler) receive(value []byte) {
